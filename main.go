@@ -18,7 +18,7 @@ func parallelGrugSort(input []int, compare func(int, int) int) []int {
 		sortedIndex := 0
 		offset := 0
 
-		for j := 0; j < n; j++ {
+		for j := range n {
 			comparisonResult := compare(input[j], value)
 			if comparisonResult < 0 {
 				sortedIndex++
@@ -30,7 +30,7 @@ func parallelGrugSort(input []int, compare func(int, int) int) []int {
 	}
 
 	wg.Add(n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		go processElement(i)
 	}
 	wg.Wait()
@@ -164,7 +164,7 @@ func compareInts(a, b int) int {
 func benchmark(input []int, sortFunc func([]int, func(int, int) int) []int, funcName string) {
 	start := time.Now()
 	iterations := 1000
-	for i := 0; i < iterations; i++ {
+	for range iterations {
 		sortFunc(input, compareInts)
 	}
 	duration := time.Since(start)
@@ -173,24 +173,25 @@ func benchmark(input []int, sortFunc func([]int, func(int, int) int) []int, func
 
 func main() {
 	arraySizes := []int{10, 100, 300, 500, 1000}
+
 	dataDistributions := map[string]func(int) []int{
 		"random": func(size int) []int {
 			array := make([]int, size)
-			for i := 0; i < size; i++ {
+			for i := range size {
 				array[i] = rand.Intn(100000)
 			}
 			return array
 		},
 		"sorted": func(size int) []int {
 			array := make([]int, size)
-			for i := 0; i < size; i++ {
+			for i := range size {
 				array[i] = i
 			}
 			return array
 		},
 		"reverse_sorted": func(size int) []int {
 			array := make([]int, size)
-			for i := 0; i < size; i++ {
+			for i := range size {
 				array[i] = size - 1 - i
 			}
 			return array
