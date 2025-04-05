@@ -172,7 +172,7 @@ func benchmark(input []int, sortFunc func([]int, func(int, int) int) []int, func
 }
 
 func main() {
-	arraySizes := []int{10, 100, 300, 500, 1000}
+	arraySizes := []int{10, 50, 100, 300, 500, 1000}
 
 	dataDistributions := map[string]func(int) []int{
 		"random": func(size int) []int {
@@ -203,13 +203,13 @@ func main() {
 		for distributionName, dataGenerator := range dataDistributions {
 			inputArray := dataGenerator(size)
 			fmt.Printf("  Distribution: %s\n", distributionName)
-			benchmark(inputArray, parallelGrugSort, "Grug Sort")
+			benchmark(inputArray, parallelGrugSort, "Grug Sort             ")
 			benchmark(inputArray, func(input []int, compare func(int, int) int) []int {
 				return parallelMergeSort(input)
-			}, "Parallel Merge Sort")
+			}, "Parallel Merge Sort   ")
 			benchmark(inputArray, func(input []int, compare func(int, int) int) []int {
 				return parallelQuickSort(input)
-			}, "Parallel Quick Sort")
+			}, "Parallel Quick Sort   ")
 			benchmark(inputArray, func(input []int, compare func(int, int) int) []int {
 				return parallelCountingSort(input)
 			}, "Parallel Counting Sort")
