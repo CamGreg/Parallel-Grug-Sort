@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"math/rand"
-	"sort"
 	"sync"
 	"time"
 )
@@ -41,30 +40,42 @@ func parallelGrugSort(input []int, compare func(int, int) int) []int {
 
 func LimitedParallelGrugSortInit(input []int, compare func(int, int) int) []int {
 	output := make([]int, len(input))
-	LimitedParallelGrugSort(input, compare, 32, output)
+	LimitedParallelGrugSort(input, compare, 32, output, 0)
 	return output
 }
 
-func LimitedParallelGrugSort(input []int, compare func(int, int) int, chunks int, sorted []int) {
-	n := len(input)
-	if chunks > n {
+func LimitedParallelGrugSort(input []int, compare func(int, int) int, chunks int, sorted []int, preInputSize int) {
+	inputLength := len(input)
+	if chunks > inputLength || preInputSize == inputLength {
 		for i, val := range parallelGrugSort(input, compare) {
 			sorted[i] = val
 		}
 		return
 	}
 
-	// 1. Find pivot points using a partial Grug Sort
-	pivotValues := make([]int, chunks)
-	lastIndex := len(pivotValues) - 1
-
 	subSorted := make([][]int, chunks+1)
 	subSortedLastIndex := len(subSorted) - 1
 
-	// Select evenly spaced elements as initial pivots
+	var uniquePivots = make(map[int]bool)
 	for i := range chunks {
-		pivotValues[i] = input[i*n/chunks]
+		uniquePivots[input[i*inputLength/chunks]] = true
 	}
+
+	if len(uniquePivots) <= 2 {
+		for i, val := range parallelGrugSort(input, compare) {
+			sorted[i] = val
+		}
+		return
+	}
+
+	pivotValues := make([]int, len(uniquePivots))
+	i := 0
+	for pivot := range uniquePivots {
+		pivotValues[i] = pivot
+		i++
+	}
+	lastIndex := len(pivotValues) - 1
+
 	pivotValues = parallelGrugSort(pivotValues, compare)
 
 	var wg sync.WaitGroup
@@ -112,86 +123,101 @@ func LimitedParallelGrugSort(input []int, compare func(int, int) int, chunks int
 		}
 		go func() {
 			defer wg.Done()
-			LimitedParallelGrugSort(val, compare, chunks, sorted[startIndex:])
+			LimitedParallelGrugSort(val, compare, chunks, sorted[startIndex:], inputLength)
 		}()
 	}
 	wg.Wait()
 }
 
-func parallelChunkedGrugSort(input []int, compare func(int, int) int, chunks int) []int {
-	n := len(input)
-	if chunks > n {
-		chunks = n
+func LimitedparallelMergeSortInit(input []int, compare func(int, int) int) []int {
+	output := make([]int, len(input))
+	LimitedparallelMergeSort(input, compare, 32, output, 0)
+	return output
+}
+
+func LimitedparallelMergeSort(input []int, compare func(int, int) int, chunks int, sorted []int, preInputSize int) {
+	inputLength := len(input)
+	if chunks > inputLength || preInputSize == inputLength {
+		for i, val := range parallelMergeSort(input) {
+			sorted[i] = val
+		}
+		return
 	}
 
-	// 1. Find pivot points using a partial Grug Sort
-	pivotIndices := make([]int, chunks)
-	pivotValues := make([]int, chunks)
+	subSorted := make([][]int, chunks+1)
+	subSortedLastIndex := len(subSorted) - 1
 
-	// Select evenly spaced elements as initial pivots
+	var uniquePivots = make(map[int]bool)
 	for i := range chunks {
-		pivotIndices[i] = i * n / chunks
-		pivotValues[i] = input[pivotIndices[i]]
+		uniquePivots[input[i*inputLength/chunks]] = true
 	}
 
-	// Run Grug sort on the selected pivot values
-	partialSortedPivotIndices := make([]int, chunks)
+	if len(uniquePivots) <= 2 {
+		for i, val := range parallelMergeSort(input) {
+			sorted[i] = val
+		}
+		return
+	}
+
+	pivotValues := make([]int, len(uniquePivots))
+	i := 0
+	for pivot := range uniquePivots {
+		pivotValues[i] = pivot
+		i++
+	}
+	lastIndex := len(pivotValues) - 1
+
+	pivotValues = parallelMergeSort(pivotValues)
 
 	var wg sync.WaitGroup
-	for i := range chunks {
+
+	wg.Add(2)
+	go func() {
+		defer wg.Done() // Decrement the counter when the goroutine finishes
+		for _, val := range input {
+			if compare(val, pivotValues[lastIndex]) >= 0 {
+				subSorted[subSortedLastIndex] = append(subSorted[subSortedLastIndex], val)
+			}
+		}
+	}()
+	go func() {
+		defer wg.Done() // Decrement the counter when the goroutine finishes
+		for _, val := range input {
+			if compare(val, pivotValues[0]) < 0 {
+				subSorted[0] = append(subSorted[0], val)
+			}
+		}
+	}()
+
+	for i := 1; i <= lastIndex; i++ {
 		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			sortedIndex := 0
-			offset := 0
-			for j := range chunks {
-				comparisonResult := compare(pivotValues[j], pivotValues[i])
-				if comparisonResult < 0 {
-					sortedIndex++
-				} else if comparisonResult == 0 && j < i {
-					offset++
+		go func() {
+			defer wg.Done() // Decrement the counter when the goroutine finishes
+			for _, val := range input {
+				if compare(val, pivotValues[i]) < 0 && compare(val, pivotValues[i-1]) >= 0 {
+					subSorted[i] = append(subSorted[i], val)
 				}
 			}
-			partialSortedPivotIndices[sortedIndex+offset] = pivotIndices[i]
-		}(i)
+		}()
 	}
+
 	wg.Wait()
 
-	// 2. Partition the input array based on the sorted pivot indices
-	sections := make([][]int, chunks+1)
-	sectionStarts := make([]int, chunks+1)
+	wg.Add(len(subSorted))
 
-	sectionStarts[0] = 0
-	for i := range chunks {
-		sectionStarts[i+1] = partialSortedPivotIndices[i]
-	}
-	sort.Ints(sectionStarts)
-
-	for i := range chunks {
-		sections[i] = input[sectionStarts[i]:sectionStarts[i+1]]
-	}
-
-	sections[chunks] = input[sectionStarts[chunks]:]
-
-	// 3. Sort each section in parallel
-	sortedSections := make([][]int, chunks+1)
-
-	for i := range chunks + 1 {
-		wg.Add(1)
-		go func(i int) {
+	for i, val := range subSorted {
+		startIndex := 0
+		if i > 0 {
+			for _, list := range subSorted[:i] {
+				startIndex += len(list)
+			}
+		}
+		go func() {
 			defer wg.Done()
-			sortedSections[i] = parallelMergeSort(sections[i]) //or grugSort.
-		}(i)
+			LimitedParallelGrugSort(val, compare, chunks, sorted[startIndex:], inputLength)
+		}()
 	}
 	wg.Wait()
-
-	// 4. Concatenate the sorted sections
-	result := make([]int, 0, n)
-	for _, section := range sortedSections {
-		result = append(result, section...)
-	}
-
-	return result
 }
 
 func parallelMergeSort(input []int) []int {
@@ -381,6 +407,8 @@ func main() {
 			fmt.Printf("  Distribution: %s\n", distributionName)
 			// benchmark(inputArray, parallelGrugSort, "Grug Sort             ", size)
 			benchmark(inputArray, LimitedParallelGrugSortInit, "LimitedParallelGrugSort ", size)
+			benchmark(inputArray, LimitedparallelMergeSortInit, "LimitedParallelMergeSort", size)
+
 			benchmark(inputArray, func(input []int, compare func(int, int) int) []int {
 				return parallelMergeSort(input)
 			}, "Parallel Merge Sort   ", size)
