@@ -129,7 +129,7 @@ func parallelChunkedGrugSort(input []int, compare func(int, int) int, chunks int
 	pivotValues := make([]int, chunks)
 
 	// Select evenly spaced elements as initial pivots
-	for i := 0; i < chunks; i++ {
+	for i := range chunks {
 		pivotIndices[i] = i * n / chunks
 		pivotValues[i] = input[pivotIndices[i]]
 	}
@@ -138,13 +138,13 @@ func parallelChunkedGrugSort(input []int, compare func(int, int) int, chunks int
 	partialSortedPivotIndices := make([]int, chunks)
 
 	var wg sync.WaitGroup
-	for i := 0; i < chunks; i++ {
+	for i := range chunks {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
 			sortedIndex := 0
 			offset := 0
-			for j := 0; j < chunks; j++ {
+			for j := range chunks {
 				comparisonResult := compare(pivotValues[j], pivotValues[i])
 				if comparisonResult < 0 {
 					sortedIndex++
@@ -162,12 +162,12 @@ func parallelChunkedGrugSort(input []int, compare func(int, int) int, chunks int
 	sectionStarts := make([]int, chunks+1)
 
 	sectionStarts[0] = 0
-	for i := 0; i < chunks; i++ {
+	for i := range chunks {
 		sectionStarts[i+1] = partialSortedPivotIndices[i]
 	}
 	sort.Ints(sectionStarts)
 
-	for i := 0; i < chunks; i++ {
+	for i := range chunks {
 		sections[i] = input[sectionStarts[i]:sectionStarts[i+1]]
 	}
 
@@ -176,7 +176,7 @@ func parallelChunkedGrugSort(input []int, compare func(int, int) int, chunks int
 	// 3. Sort each section in parallel
 	sortedSections := make([][]int, chunks+1)
 
-	for i := 0; i < chunks+1; i++ {
+	for i := range chunks + 1 {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
@@ -320,40 +320,58 @@ func compareInts(a, b int) int {
 func benchmark(input []int, sortFunc func([]int, func(int, int) int) []int, funcName string, n int) {
 	start := time.Now()
 	iterations := 100
-	var output []int
+	// var output []int
 	for range iterations {
-		output = sortFunc(input, compareInts)
+		// output = sortFunc(input, compareInts)
+		sortFunc(input, compareInts)
 	}
 	duration := time.Since(start)
-	fmt.Printf("%s: n %d us\n", funcName, int(duration.Microseconds())/n)
-	fmt.Println(output)
+	fmt.Printf("%s %s\n", funcName, duration)
+	// fmt.Printf("%s: n %d us\n", funcName, int(duration.Microseconds())/n)
+	// fmt.Println(output)
+}
+
+func validate() {
+	array := make([]int, 100000)
+	for i := range 100000 {
+		array[i] = rand.Intn(100000)
+	}
+
+	merge := parallelMergeSort(array)
+	gruf := parallelGrugSort(array, compareInts)
+
+	for i := range merge {
+		if merge[i] != gruf[i] {
+			fmt.Println("Mismatch")
+		}
+	}
 }
 
 func main() {
-	arraySizes := []int{10, 50, 100, 300, 500, 1000, 10000}
+	arraySizes := []int{10, 100, 1000, 10000, 100000}
 
 	dataDistributions := map[string]func(int) []int{
 		"random": func(size int) []int {
 			array := make([]int, size)
 			for i := range size {
-				array[i] = rand.Intn(100000)
+				array[i] = rand.Intn(100)
 			}
 			return array
 		},
-		"sorted": func(size int) []int {
-			array := make([]int, size)
-			for i := range size {
-				array[i] = i
-			}
-			return array
-		},
-		"reverse_sorted": func(size int) []int {
-			array := make([]int, size)
-			for i := range size {
-				array[i] = size - 1 - i
-			}
-			return array
-		},
+		// "sorted": func(size int) []int {
+		// 	array := make([]int, size)
+		// 	for i := range size {
+		// 		array[i] = i
+		// 	}
+		// 	return array
+		// },
+		// "reverse_sorted": func(size int) []int {
+		// 	array := make([]int, size)
+		// 	for i := range size {
+		// 		array[i] = size - 1 - i
+		// 	}
+		// 	return array
+		// },
 	}
 
 	for _, size := range arraySizes {
@@ -361,18 +379,18 @@ func main() {
 		for distributionName, dataGenerator := range dataDistributions {
 			inputArray := dataGenerator(size)
 			fmt.Printf("  Distribution: %s\n", distributionName)
-			benchmark(inputArray, parallelGrugSort, "Grug Sort             ", size)
+			// benchmark(inputArray, parallelGrugSort, "Grug Sort             ", size)
 			benchmark(inputArray, LimitedParallelGrugSortInit, "LimitedParallelGrugSort ", size)
 			benchmark(inputArray, func(input []int, compare func(int, int) int) []int {
 				return parallelMergeSort(input)
 			}, "Parallel Merge Sort   ", size)
-			benchmark(inputArray, func(input []int, compare func(int, int) int) []int {
-				return parallelQuickSort(input)
-			}, "Parallel Quick Sort   ", size)
+			// benchmark(inputArray, func(input []int, compare func(int, int) int) []int {
+			// 	return parallelQuickSort(input)
+			// }, "Parallel Quick Sort   ", size)
 			benchmark(inputArray, func(input []int, compare func(int, int) int) []int {
 				return parallelCountingSort(input)
 			}, "Parallel Counting Sort", size)
 		}
 	}
-
+	validate()
 }
