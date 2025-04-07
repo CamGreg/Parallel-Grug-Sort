@@ -40,13 +40,13 @@ func parallelGrugSort(input []int, compare func(int, int) int) []int {
 
 func LimitedParallelGrugSortInit(input []int, compare func(int, int) int) []int {
 	output := make([]int, len(input))
-	LimitedParallelGrugSort(input, compare, 32, output, 0)
+	LimitedParallelGrugSort(input, compare, 8, output)
 	return output
 }
 
-func LimitedParallelGrugSort(input []int, compare func(int, int) int, chunks int, sorted []int, preInputSize int) {
+func LimitedParallelGrugSort(input []int, compare func(int, int) int, chunks int, sorted []int) {
 	inputLength := len(input)
-	if chunks > inputLength || preInputSize == inputLength {
+	if chunks > inputLength {
 		for i, val := range parallelGrugSort(input, compare) {
 			sorted[i] = val
 		}
@@ -55,17 +55,11 @@ func LimitedParallelGrugSort(input []int, compare func(int, int) int, chunks int
 
 	subSorted := make([][]int, chunks+1)
 	subSortedLastIndex := len(subSorted) - 1
+	matchingValues := make([][]int, chunks)
 
 	var uniquePivots = make(map[int]bool)
 	for i := range chunks {
 		uniquePivots[input[i*inputLength/chunks]] = true
-	}
-
-	if len(uniquePivots) <= 2 {
-		for i, val := range parallelGrugSort(input, compare) {
-			sorted[i] = val
-		}
-		return
 	}
 
 	pivotValues := make([]int, len(uniquePivots))
@@ -80,15 +74,8 @@ func LimitedParallelGrugSort(input []int, compare func(int, int) int, chunks int
 
 	var wg sync.WaitGroup
 
-	wg.Add(2)
-	go func() {
-		defer wg.Done() // Decrement the counter when the goroutine finishes
-		for _, val := range input {
-			if compare(val, pivotValues[lastIndex]) >= 0 {
-				subSorted[subSortedLastIndex] = append(subSorted[subSortedLastIndex], val)
-			}
-		}
-	}()
+	wg.Add(1)
+
 	go func() {
 		defer wg.Done() // Decrement the counter when the goroutine finishes
 		for _, val := range input {
@@ -98,16 +85,32 @@ func LimitedParallelGrugSort(input []int, compare func(int, int) int, chunks int
 		}
 	}()
 
-	for i := 1; i <= lastIndex; i++ {
+	if len(uniquePivots) > 1 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done() // Decrement the counter when the goroutine finishes
 			for _, val := range input {
-				if compare(val, pivotValues[i]) < 0 && compare(val, pivotValues[i-1]) >= 0 {
-					subSorted[i] = append(subSorted[i], val)
+				if compare(val, pivotValues[lastIndex]) > 0 {
+					subSorted[subSortedLastIndex] = append(subSorted[subSortedLastIndex], val)
+				} else if compare(val, pivotValues[lastIndex]) == 0 {
+					matchingValues[subSortedLastIndex-1] = append(matchingValues[subSortedLastIndex-1], val)
 				}
 			}
 		}()
+	} else if len(uniquePivots) > 2 {
+		wg.Add(lastIndex - 1)
+		for i := 1; i <= lastIndex; i++ {
+			go func() {
+				defer wg.Done() // Decrement the counter when the goroutine finishes
+				for _, val := range input {
+					if compare(val, pivotValues[i]) < 0 && compare(val, pivotValues[i-1]) > 0 {
+						subSorted[i] = append(subSorted[i], val)
+					} else if compare(val, pivotValues[i-1]) == 0 {
+						matchingValues[i-1] = append(matchingValues[i-1], val)
+					}
+				}
+			}()
+		}
 	}
 
 	wg.Wait()
@@ -117,13 +120,28 @@ func LimitedParallelGrugSort(input []int, compare func(int, int) int, chunks int
 	for i, val := range subSorted {
 		startIndex := 0
 		if i > 0 {
-			for _, list := range subSorted[:i] {
+			for j, list := range subSorted[:i] {
 				startIndex += len(list)
+				if j > 0 {
+					startIndex += len(matchingValues[j-1])
+				}
 			}
 		}
+
 		go func() {
 			defer wg.Done()
-			LimitedParallelGrugSort(val, compare, chunks, sorted[startIndex:], inputLength)
+
+			if len(matchingValues) < i {
+				duplicateIndex := startIndex + len(matchingValues[i])
+				for j, list := range matchingValues[i] {
+					sorted[duplicateIndex+j] = list
+				}
+			}
+
+			if len(val) == 0 {
+				return
+			}
+			LimitedParallelGrugSort(val, compare, chunks, sorted[startIndex:])
 		}()
 	}
 	wg.Wait()
@@ -214,7 +232,7 @@ func LimitedparallelMergeSort(input []int, compare func(int, int) int, chunks in
 		}
 		go func() {
 			defer wg.Done()
-			LimitedParallelGrugSort(val, compare, chunks, sorted[startIndex:], inputLength)
+			LimitedparallelMergeSort(val, compare, chunks, sorted[startIndex:], inputLength)
 		}()
 	}
 	wg.Wait()
