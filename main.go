@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"math/rand"
+	"slices"
 	"sync"
 	"time"
 )
@@ -47,6 +48,10 @@ func LimitedParallelGrugSortInit(input []int, compare func(int, int) int) []int 
 func LimitedParallelGrugSort(input []int, compare func(int, int) int, chunks int, sorted []int) {
 	inputLength := len(input)
 	if chunks > inputLength {
+		// slices.Sort(input)
+		// for i, val := range input {
+		// 	sorted[i] = val
+		// }
 		for i, val := range parallelGrugSort(input, compare) {
 			sorted[i] = val
 		}
@@ -57,6 +62,7 @@ func LimitedParallelGrugSort(input []int, compare func(int, int) int, chunks int
 	subSortedLastIndex := len(subSorted) - 1
 	matchingValues := make([][]int, chunks)
 
+	// TODO should find uniques based on passed compare function as map uniqueness is not guaranteed to be the same. For now works for out integer test.
 	var uniquePivots = make(map[int]bool)
 	for i := range chunks {
 		uniquePivots[input[i*inputLength/chunks]] = true
@@ -71,6 +77,7 @@ func LimitedParallelGrugSort(input []int, compare func(int, int) int, chunks int
 	lastIndex := len(pivotValues) - 1
 
 	pivotValues = parallelGrugSort(pivotValues, compare)
+	// slices.Sort(pivotValues)
 
 	var wg sync.WaitGroup
 
@@ -142,97 +149,6 @@ func LimitedParallelGrugSort(input []int, compare func(int, int) int, chunks int
 				return
 			}
 			LimitedParallelGrugSort(val, compare, chunks, sorted[startIndex:])
-		}()
-	}
-	wg.Wait()
-}
-
-func LimitedparallelMergeSortInit(input []int, compare func(int, int) int) []int {
-	output := make([]int, len(input))
-	LimitedparallelMergeSort(input, compare, 32, output, 0)
-	return output
-}
-
-func LimitedparallelMergeSort(input []int, compare func(int, int) int, chunks int, sorted []int, preInputSize int) {
-	inputLength := len(input)
-	if chunks > inputLength || preInputSize == inputLength {
-		for i, val := range parallelMergeSort(input) {
-			sorted[i] = val
-		}
-		return
-	}
-
-	subSorted := make([][]int, chunks+1)
-	subSortedLastIndex := len(subSorted) - 1
-
-	var uniquePivots = make(map[int]bool)
-	for i := range chunks {
-		uniquePivots[input[i*inputLength/chunks]] = true
-	}
-
-	if len(uniquePivots) <= 2 {
-		for i, val := range parallelMergeSort(input) {
-			sorted[i] = val
-		}
-		return
-	}
-
-	pivotValues := make([]int, len(uniquePivots))
-	i := 0
-	for pivot := range uniquePivots {
-		pivotValues[i] = pivot
-		i++
-	}
-	lastIndex := len(pivotValues) - 1
-
-	pivotValues = parallelMergeSort(pivotValues)
-
-	var wg sync.WaitGroup
-
-	wg.Add(2)
-	go func() {
-		defer wg.Done() // Decrement the counter when the goroutine finishes
-		for _, val := range input {
-			if compare(val, pivotValues[lastIndex]) >= 0 {
-				subSorted[subSortedLastIndex] = append(subSorted[subSortedLastIndex], val)
-			}
-		}
-	}()
-	go func() {
-		defer wg.Done() // Decrement the counter when the goroutine finishes
-		for _, val := range input {
-			if compare(val, pivotValues[0]) < 0 {
-				subSorted[0] = append(subSorted[0], val)
-			}
-		}
-	}()
-
-	for i := 1; i <= lastIndex; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done() // Decrement the counter when the goroutine finishes
-			for _, val := range input {
-				if compare(val, pivotValues[i]) < 0 && compare(val, pivotValues[i-1]) >= 0 {
-					subSorted[i] = append(subSorted[i], val)
-				}
-			}
-		}()
-	}
-
-	wg.Wait()
-
-	wg.Add(len(subSorted))
-
-	for i, val := range subSorted {
-		startIndex := 0
-		if i > 0 {
-			for _, list := range subSorted[:i] {
-				startIndex += len(list)
-			}
-		}
-		go func() {
-			defer wg.Done()
-			LimitedparallelMergeSort(val, compare, chunks, sorted[startIndex:], inputLength)
 		}()
 	}
 	wg.Wait()
@@ -357,6 +273,11 @@ func parallelCountingSort(input []int) []int {
 	return sorted
 }
 
+func sortInts(input []int, compareFunc func(int, int) int) []int {
+	slices.SortFunc(input, compareFunc)
+	return input
+}
+
 func compareInts(a, b int) int {
 	return a - b
 }
@@ -378,7 +299,7 @@ func benchmark(input []int, sortFunc func([]int, func(int, int) int) []int, func
 func validate() {
 	array := make([]int, 100000)
 	for i := range 100000 {
-		array[i] = rand.Intn(100000)
+		array[i] = rand.Intn(10000000)
 	}
 
 	merge := parallelMergeSort(array)
@@ -392,13 +313,13 @@ func validate() {
 }
 
 func main() {
-	arraySizes := []int{10, 100, 1000, 10000, 100000}
+	arraySizes := []int{10, 100, 1000, 10000, 100000, 100000000}
 
 	dataDistributions := map[string]func(int) []int{
 		"random": func(size int) []int {
 			array := make([]int, size)
 			for i := range size {
-				array[i] = rand.Intn(100)
+				array[i] = rand.Intn(10000000)
 			}
 			return array
 		},
@@ -425,17 +346,17 @@ func main() {
 			fmt.Printf("  Distribution: %s\n", distributionName)
 			// benchmark(inputArray, parallelGrugSort, "Grug Sort             ", size)
 			benchmark(inputArray, LimitedParallelGrugSortInit, "LimitedParallelGrugSort ", size)
-			benchmark(inputArray, LimitedparallelMergeSortInit, "LimitedParallelMergeSort", size)
-
-			benchmark(inputArray, func(input []int, compare func(int, int) int) []int {
-				return parallelMergeSort(input)
-			}, "Parallel Merge Sort   ", size)
+			// benchmark(inputArray, LimitedparallelMergeSortInit, "LimitedParallelMergeSort", size)
+			benchmark(inputArray, sortInts, "Sort Ints", size)
+			// benchmark(inputArray, func(input []int, compare func(int, int) int) []int {
+			// 	return parallelMergeSort(input)
+			// }, "Parallel Merge Sort   ", size)
 			// benchmark(inputArray, func(input []int, compare func(int, int) int) []int {
 			// 	return parallelQuickSort(input)
 			// }, "Parallel Quick Sort   ", size)
-			benchmark(inputArray, func(input []int, compare func(int, int) int) []int {
-				return parallelCountingSort(input)
-			}, "Parallel Counting Sort", size)
+			// benchmark(inputArray, func(input []int, compare func(int, int) int) []int {
+			// 	return parallelCountingSort(input)
+			// }, "Parallel Counting Sort", size)
 		}
 	}
 	validate()
