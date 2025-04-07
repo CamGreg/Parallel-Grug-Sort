@@ -299,14 +299,14 @@ func benchmark(input []int, sortFunc func([]int, func(int, int) int) []int, func
 func validate() {
 	array := make([]int, 100000)
 	for i := range 100000 {
-		array[i] = rand.Intn(10000000)
+		array[i] = rand.Intn(1000000)
 	}
 
-	merge := parallelMergeSort(array)
-	gruf := parallelGrugSort(array, compareInts)
+	Grug := parallelGrugSort(array, compareInts)
+	slices.Sort(array)
 
-	for i := range merge {
-		if merge[i] != gruf[i] {
+	for i := range Grug {
+		if Grug[i] != array[i] {
 			fmt.Println("Mismatch")
 		}
 	}
@@ -319,7 +319,7 @@ func main() {
 		"random": func(size int) []int {
 			array := make([]int, size)
 			for i := range size {
-				array[i] = rand.Intn(10000000)
+				array[i] = rand.Intn(100)
 			}
 			return array
 		},
