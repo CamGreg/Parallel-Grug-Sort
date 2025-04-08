@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"maps"
 	"math/rand"
+	"runtime"
+	"runtime/debug"
 	"slices"
 	"sync"
 	"time"
@@ -140,15 +142,33 @@ func compareInts(a, b int) int {
 }
 
 func benchmark(input []int, sortFunc func([]int, func(int, int) int) []int, funcName string, n int) {
-	start := time.Now()
+	totalDuration := time.Duration(0)
+	longestDuration := time.Duration(0)
+	shortestDuration := time.Duration(time.Second)
 	iterations := 100
 	// var output []int
 	for range iterations {
 		// output = sortFunc(input, compareInts)
+		inputCopy := make([]int, len(input))
+		copy(inputCopy, input)
+		debug.SetGCPercent(-1)
+		runtime.GC()
+		start := time.Now()
 		sortFunc(input, compareInts)
+
+		if time.Since(start) > longestDuration {
+			longestDuration = time.Since(start)
+		}
+		if time.Since(start) < shortestDuration {
+			shortestDuration = time.Since(start)
+		}
+
+		totalDuration += time.Since(start)
+		runtime.GC()
+		debug.SetGCPercent(100)
 	}
-	duration := time.Since(start)
-	fmt.Printf("%s %s\n", funcName, duration)
+
+	fmt.Printf("%s total: %s, longest: %s, shortest: %s\n", funcName, totalDuration, longestDuration, shortestDuration)
 	// fmt.Printf("%s: n %d us\n", funcName, int(duration.Microseconds())/n)
 	// fmt.Println(output)
 }
@@ -170,7 +190,7 @@ func validate() {
 }
 
 func main() {
-	arraySizes := []int{ /*10, 100, 1000, 10000, 100000,*/ 100000000}
+	arraySizes := []int{ /*10, 100, 1000, 10000, 100000,*/ 10000000}
 
 	dataDistributions := map[string]func(int) []int{
 		"random": func(size int) []int {
@@ -201,10 +221,6 @@ func main() {
 		for distributionName, dataGenerator := range dataDistributions {
 			sorty.MaxGor = 20
 			inputArray := dataGenerator(size)
-			// sortyINput := make([]int, size)
-			// copy(sortyINput, inputArray)
-			// GolangInput := make([]int, size)
-			// copy(GolangInput, inputArray)
 			fmt.Printf("  Distribution: %s\n", distributionName)
 			// benchmark(inputArray, parallelGrugSort, "Grug Sort             ", size)
 			benchmark(inputArray, LimitedParallelGrugSortInit, "LimitedParallelGrugSort ", size)
@@ -219,7 +235,6 @@ func main() {
 			// 	return parallelCountingSort(input)
 			// }, "Parallel Counting Sort", size)
 			// benchmark(GolangInput, GolangSort, "GolangSort", size)
-
 			benchmark(inputArray, sortySort, "sortySort", size)
 		}
 	}
