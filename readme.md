@@ -4,7 +4,7 @@ Toy "benchmark" for sorting algorithms.
 
 Grug sort (probabaly the naive sorting implementation) is O(n^2), but can be parallelized infinitely to in practice execute in O(n) time. Obviously quickly hit the limits of parallelism on my CPU, instead of trying to run on a GPU, i created a divide and conquer ingress for it. Somehow that ended up seeming to execute in < O(n) time, but has a lot of overhead compared to golangs sort, so you need to get to ~10M elements before it starts winning.
 
-Sorty's sort was added for a parrallel sort comparison. It behaves similar to Golang's sort, slightly faster in the high n tests but still slower than divided Grug sort.
+Sorty's sort was added for a parrallel sort comparison. It behaves similar to Golang's sort, slightly faster in the high n tests but still slower than divided Grug sort. Once the MaxGor parameter is increaded from its default of 3, it's the fastest of the three.
 
 Substituting Golang's sort instead of Grug sort, in the divider function, i didn't see significant differences in performance. However adding a decent cutoff size (~1-10k) and using Golang's sort at that point mitigates the performance differences at lower n while still maintaining the high n performance.
 
