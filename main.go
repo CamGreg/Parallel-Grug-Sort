@@ -48,25 +48,26 @@ func LimitedParallelGrugSortInit(input []int, compare func(int, int) int) []int 
 	return output
 }
 
+// todo: add final sort algorithm as input parameter
 func LimitedParallelGrugSort(input []int, compare func(int, int) int, chunks int, sorted []int) {
 	inputLength := len(input)
-	// if inputLength < 100 {
-	// 	slices.Sort(input)
-	// 	copy(input, sorted)
-	// 	// for i, val := range parallelGrugSort(input, compare) {
-	// 	// 	sorted[i] = val
-	// 	// }
-	// 	return
-	// }
-	// if chunks > inputLength {
-	// 	chunks = inputLength
-	// }
-	if chunks > inputLength {
-		for i, val := range parallelGrugSort(input, compare) {
-			sorted[i] = val
-		}
+	if inputLength <= 1000 {
+		slices.SortStableFunc(input, compare)
+		copy(sorted, input)
+		// for i, val := range parallelGrugSort(input, compare) {
+		// 	sorted[i] = val
+		// }
 		return
 	}
+	if chunks > inputLength {
+		chunks = inputLength
+	}
+	// if chunks > inputLength {
+	// 	for i, val := range parallelGrugSort(input, compare) {
+	// 		sorted[i] = val
+	// 	}
+	// 	return
+	// }
 
 	subSorted := make([][]int, chunks+1)
 	subSortedLastIndex := len(subSorted) - 1
@@ -78,9 +79,9 @@ func LimitedParallelGrugSort(input []int, compare func(int, int) int, chunks int
 		uniquePivots[input[i*inputLength/chunks]] = true
 	}
 
-	// pivotValues := slices.Collect(maps.Keys(uniquePivots))
-	// slices.Sort(pivotValues)
-	pivotValues := parallelGrugSort(slices.Collect(maps.Keys(uniquePivots)), compare)
+	pivotValues := slices.Collect(maps.Keys(uniquePivots))
+	slices.Sort(pivotValues)
+	// pivotValues := parallelGrugSort(slices.Collect(maps.Keys(uniquePivots)), compare)
 	lastIndex := len(pivotValues) - 1
 
 	var wg sync.WaitGroup
@@ -325,30 +326,34 @@ func main() {
 		"random": func(size int) []int {
 			array := make([]int, size)
 			for i := range size {
-				array[i] = rand.Intn(100)
+				array[i] = rand.Intn(100000)
 			}
 			return array
 		},
-		// "sorted": func(size int) []int {
-		// 	array := make([]int, size)
-		// 	for i := range size {
-		// 		array[i] = i
-		// 	}
-		// 	return array
-		// },
-		// "reverse_sorted": func(size int) []int {
-		// 	array := make([]int, size)
-		// 	for i := range size {
-		// 		array[i] = size - 1 - i
-		// 	}
-		// 	return array
-		// },
+		"sorted": func(size int) []int {
+			array := make([]int, size)
+			for i := range size {
+				array[i] = i
+			}
+			return array
+		},
+		"reverse_sorted": func(size int) []int {
+			array := make([]int, size)
+			for i := range size {
+				array[i] = size - 1 - i
+			}
+			return array
+		},
 	}
 
 	for _, size := range arraySizes {
 		fmt.Printf("\nArray Size: %d\n", size)
 		for distributionName, dataGenerator := range dataDistributions {
 			inputArray := dataGenerator(size)
+			sortyINput := make([]int, size)
+			copy(sortyINput, inputArray)
+			GolangInput := make([]int, size)
+			copy(GolangInput, inputArray)
 			fmt.Printf("  Distribution: %s\n", distributionName)
 			// benchmark(inputArray, parallelGrugSort, "Grug Sort             ", size)
 			benchmark(inputArray, LimitedParallelGrugSortInit, "LimitedParallelGrugSort ", size)
@@ -362,8 +367,8 @@ func main() {
 			// benchmark(inputArray, func(input []int, compare func(int, int) int) []int {
 			// 	return parallelCountingSort(input)
 			// }, "Parallel Counting Sort", size)
-			// benchmark(inputArray, GolangSort, "GolangSort", size)
-			benchmark(inputArray, sortySort, "sortySort", size)
+			benchmark(GolangInput, GolangSort, "GolangSort", size)
+			benchmark(sortyINput, sortySort, "sortySort", size)
 		}
 	}
 	validate()
