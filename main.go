@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -146,8 +147,9 @@ func benchmark(input []int, sortFunc func([]int, func(int, int) int) []int, func
 	longestDuration := time.Duration(0)
 	shortestDuration := time.Duration(time.Second)
 	iterations := 100
+	outputs := make([]time.Duration, iterations)
 	// var output []int
-	for range iterations {
+	for i := range iterations {
 		// output = sortFunc(input, compareInts)
 		inputCopy := make([]int, len(input))
 		copy(inputCopy, input)
@@ -163,12 +165,20 @@ func benchmark(input []int, sortFunc func([]int, func(int, int) int) []int, func
 			shortestDuration = time.Since(start)
 		}
 
-		totalDuration += time.Since(start)
+		outputs[i] = time.Since(start)
+		totalDuration += outputs[i]
 		runtime.GC()
 		debug.SetGCPercent(100)
 	}
 
-	fmt.Printf("%s total: %s, longest: %s, shortest: %s\n", funcName, totalDuration, longestDuration, shortestDuration)
+	slices.Sort(outputs)
+
+	if len(funcName) < 10 {
+		padding := strings.Repeat(" ", 10-len(funcName))
+		funcName = funcName + padding
+	}
+
+	fmt.Printf("%s Mean: %s, Median %s, Max: %s, Min: %s\n", funcName[:10], totalDuration/time.Duration(iterations), outputs[iterations/2], longestDuration, shortestDuration)
 	// fmt.Printf("%s: n %d us\n", funcName, int(duration.Microseconds())/n)
 	// fmt.Println(output)
 }
@@ -223,7 +233,7 @@ func main() {
 			inputArray := dataGenerator(size)
 			fmt.Printf("  Distribution: %s\n", distributionName)
 			// benchmark(inputArray, parallelGrugSort, "Grug Sort             ", size)
-			benchmark(inputArray, LimitedParallelGrugSortInit, "LimitedParallelGrugSort ", size)
+			benchmark(inputArray, LimitedParallelGrugSortInit, "Custom   ", size)
 			// benchmark(inputArray, LimitedparallelMergeSortInit, "LimitedParallelMergeSort", size)
 			// benchmark(inputArray, func(input []int, compare func(int, int) int) []int {
 			// 	return parallelMergeSort(input)
