@@ -14,14 +14,14 @@ import (
 	"github.com/jfcg/sorty/v2"
 )
 
-func LimitedParallelGrugSortInit(input []int, compare func(int, int) int) []int {
+func CustomSortInit(input []int, compare func(int, int) int) []int {
 	output := make([]int, len(input))
-	LimitedParallelGrugSort(input, compare, 16, output)
+	CustomSort(input, compare, 16, output)
 	return output
 }
 
 // todo: add final sort algorithm as input parameter
-func LimitedParallelGrugSort(input []int, compare func(int, int) int, chunks int, sorted []int) {
+func CustomSort(input []int, compare func(int, int) int, chunks int, sorted []int) {
 	inputLength := len(input)
 	if inputLength <= 1000 {
 		slices.SortStableFunc(input, compare)
@@ -122,7 +122,7 @@ func LimitedParallelGrugSort(input []int, compare func(int, int) int, chunks int
 		if len(val) == 0 {
 			return
 		}
-		LimitedParallelGrugSort(val, compare, chunks, sorted[startIndex:])
+		CustomSort(val, compare, chunks, sorted[startIndex:])
 		// }()
 	}
 	// wg.Wait()
@@ -142,15 +142,15 @@ func compareInts(a, b int) int {
 	return a - b
 }
 
-func benchmark(input []int, sortFunc func([]int, func(int, int) int) []int, funcName string, n int) {
+func benchmark(input []int, sortFunc func([]int, func(int, int) int) []int, funcName string) {
+	iterations := 100
+
+	outputs := make([]time.Duration, iterations)
 	totalDuration := time.Duration(0)
 	longestDuration := time.Duration(0)
 	shortestDuration := time.Duration(time.Second)
-	iterations := 100
-	outputs := make([]time.Duration, iterations)
-	// var output []int
+
 	for i := range iterations {
-		// output = sortFunc(input, compareInts)
 		inputCopy := make([]int, len(input))
 		copy(inputCopy, input)
 		debug.SetGCPercent(-1)
@@ -179,8 +179,6 @@ func benchmark(input []int, sortFunc func([]int, func(int, int) int) []int, func
 	}
 
 	fmt.Printf("%s Mean: %s, Median %s, Max: %s, Min: %s\n", funcName[:10], totalDuration/time.Duration(iterations), outputs[iterations/2], longestDuration, shortestDuration)
-	// fmt.Printf("%s: n %d us\n", funcName, int(duration.Microseconds())/n)
-	// fmt.Println(output)
 }
 
 func validate() {
@@ -189,7 +187,7 @@ func validate() {
 		array[i] = rand.Intn(10000)
 	}
 
-	Grug := LimitedParallelGrugSortInit(array, compareInts)
+	Grug := CustomSortInit(array, compareInts)
 	slices.Sort(array)
 
 	for i := range Grug {
@@ -232,20 +230,9 @@ func main() {
 			sorty.MaxGor = 20
 			inputArray := dataGenerator(size)
 			fmt.Printf("  Distribution: %s\n", distributionName)
-			// benchmark(inputArray, parallelGrugSort, "Grug Sort             ", size)
-			benchmark(inputArray, LimitedParallelGrugSortInit, "Custom   ", size)
-			// benchmark(inputArray, LimitedparallelMergeSortInit, "LimitedParallelMergeSort", size)
-			// benchmark(inputArray, func(input []int, compare func(int, int) int) []int {
-			// 	return parallelMergeSort(input)
-			// }, "Parallel Merge Sort   ", size)
-			// benchmark(inputArray, func(input []int, compare func(int, int) int) []int {
-			// 	return parallelQuickSort(input)
-			// }, "Parallel Quick Sort   ", size)
-			// benchmark(inputArray, func(input []int, compare func(int, int) int) []int {
-			// 	return parallelCountingSort(input)
-			// }, "Parallel Counting Sort", size)
-			// benchmark(GolangInput, GolangSort, "GolangSort", size)
-			benchmark(inputArray, sortySort, "sortySort", size)
+			benchmark(inputArray, CustomSortInit, "Custom")
+			benchmark(inputArray, GolangSort, "Golang")
+			benchmark(inputArray, sortySort, "sorty")
 		}
 	}
 	validate()
