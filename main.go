@@ -14,6 +14,102 @@ import (
 	"github.com/jfcg/sorty/v2"
 )
 
+func Custom2SortInit(input []int, compare func(int, int) int) []int {
+	output := make([]int, len(input))
+	LessParMoreCache(input, compare, 16, output)
+	return output
+}
+
+// todo: add final sort algorithm as input parameter
+func LessParMoreCache(input []int, compare func(int, int) int, chunks int, sorted []int) {
+	inputLength := len(input)
+	if inputLength <= 1000 {
+		slices.SortStableFunc(input, compare)
+		copy(sorted, input)
+		// for i, val := range parallelGrugSort(input, compare) {
+		// 	sorted[i] = val
+		// }
+		return
+	}
+	if chunks > inputLength {
+		chunks = inputLength
+	}
+	// if chunks > inputLength {
+	// 	for i, val := range parallelGrugSort(input, compare) {
+	// 		sorted[i] = val
+	// 	}
+	// 	return
+	// }
+
+	subSorted := make([][]int, chunks+1)
+	subSortedLastIndex := len(subSorted) - 1
+	matchingValues := make([][]int, chunks)
+
+	// TODO should find uniques based on passed compare function as map uniqueness is not guaranteed to be the same. For now works for out integer test.
+	var uniquePivots = make(map[int]bool)
+	for i := range chunks {
+		uniquePivots[input[i*inputLength/chunks]] = true
+	}
+
+	pivotValues := slices.Collect(maps.Keys(uniquePivots))
+	slices.Sort(pivotValues)
+	// pivotValues := parallelGrugSort(slices.Collect(maps.Keys(uniquePivots)), compare)
+	lastIndex := len(pivotValues) - 1
+
+	for _, val := range input {
+		if compare(val, pivotValues[0]) < 0 {
+			subSorted[0] = append(subSorted[0], val)
+		}
+		if len(uniquePivots) > 2 {
+			for i := 1; i <= lastIndex; i++ {
+				if compare(val, pivotValues[i]) < 0 && compare(val, pivotValues[i-1]) > 0 {
+					subSorted[i] = append(subSorted[i], val)
+				} else if compare(val, pivotValues[i-1]) == 0 {
+					matchingValues[i-1] = append(matchingValues[i-1], val)
+				}
+			}
+		}
+		if len(uniquePivots) > 1 {
+			if compare(val, pivotValues[lastIndex]) > 0 {
+				subSorted[subSortedLastIndex] = append(subSorted[subSortedLastIndex], val)
+			} else if compare(val, pivotValues[lastIndex]) == 0 {
+				matchingValues[subSortedLastIndex-1] = append(matchingValues[subSortedLastIndex-1], val)
+			}
+		}
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(len(subSorted))
+	for i, val := range subSorted {
+		startIndex := 0
+		if i > 0 {
+			for j, list := range subSorted[:i] {
+				startIndex += len(list)
+				if j > 0 {
+					startIndex += len(matchingValues[j-1])
+				}
+			}
+		}
+
+		go func() {
+			defer wg.Done()
+
+			if len(matchingValues) < i {
+				duplicateIndex := startIndex + len(matchingValues[i])
+				for j, list := range matchingValues[i] {
+					sorted[duplicateIndex+j] = list
+				}
+			}
+
+			if len(val) == 0 {
+				return
+			}
+			LessParMoreCache(val, compare, chunks, sorted[startIndex:])
+		}()
+	}
+	wg.Wait()
+}
+
 func CustomSortInit(input []int, compare func(int, int) int) []int {
 	output := make([]int, len(input))
 	CustomSort(input, compare, 16, output)
@@ -198,7 +294,7 @@ func validate() {
 }
 
 func main() {
-	arraySizes := []int{ /*10, 100, 1000, 10000, 100000,*/ 10000000}
+	arraySizes := []int{ /*10, 100, 1000, 10000, 100000,*/ 100000}
 
 	dataDistributions := map[string]func(int) []int{
 		"random": func(size int) []int {
@@ -231,6 +327,7 @@ func main() {
 			inputArray := dataGenerator(size)
 			fmt.Printf("  Distribution: %s\n", distributionName)
 			benchmark(inputArray, CustomSortInit, "Custom")
+			benchmark(inputArray, Custom2SortInit, "Custom2")
 			benchmark(inputArray, GolangSort, "Golang")
 			benchmark(inputArray, sortySort, "sorty")
 		}
